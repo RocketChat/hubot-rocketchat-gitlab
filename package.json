@@ -1,0 +1,35 @@
+{
+  "name": "hubot-rocketchat-gitlab",
+  "version": "0.0.1",
+  "description": "Hubot script to integrate with gitlab",
+  "preferGlobal": "false",
+  "main": "index.js",
+  "scripts": {},
+  "author": "George Rodrigues da Cunha Silva",
+  "keywords": [
+    "hubot",
+    "hubot-redis-brain",
+    "gitlab",
+    "agile",
+    "burndown",
+    "sigma-geosistemas"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitlab.sigmageosistemas.com.br/dev/hubot-gitlab-agile.git"
+  },
+  "dependencies": {
+    "gitlab": "^1.7.1",
+    "hubot": "^2.13.2",
+    "hubot-redis-brain": "0.0.3",
+    "underscore": "^1.8.3"
+  },
+  "engines": {
+    "node": "*"
+  },
+  "bugs": {
+    "url": "https://gitlab.sigmageosistemas.com.br/dev/hubot-gitlab-agile/issues"
+  },
+  "homepage": "https://gitlab.sigmageosistemas.com.br/dev/hubot-gitlab-agile",
+  "license": "GPL-3.0"
+}
