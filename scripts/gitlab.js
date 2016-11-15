@@ -230,15 +230,15 @@ module.exports = function(robot) {
 		});
 	});
 
-	// Waiting new node gitlab package version
-	// robot.respond(/i(?:ssue)? (\d+) (remove)/i, function(res) {
-	// 	extractParams(res, 'issue, action, project');
+	robot.respond(/i(?:ssue)? (\d+) (remove)/i, function(res) {
+		extractParams(res, 'issue, action, project');
 
-	// 	gitlab.issues.remove(res.params.project, res.params.issue, function(record) {
-	// 		console.log(record);
-	// 		var msg = `Issue ${record.id} is now ${record.state} in **Project #${res.params.project}**\n`;
-
-	// 		res.reply(renderIssues(res, msg, [record]));
-	// 	});
-	// });
+		gitlab.issues.remove(res.params.project, res.params.issue, function(record) {
+			if (record === true) {
+				res.reply(`Issue ${res.params.issue} was removed in **Project #${res.params.project}**`);
+			} else {
+				res.reply(`There was a problem removing issue ${res.params.isseu} in **Project #${res.params.project}**`);
+			}
+		});
+	});
 };
