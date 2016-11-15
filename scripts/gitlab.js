@@ -22,10 +22,15 @@ module.exports = function(robot) {
 	});
 
 	var _ = require('underscore');
+	var help = {};
 
 	robot.brain.on('loaded', function() {
 
 	});
+
+	function describe(command, description) {
+		help[command] = description;
+	}
 
 	function limitResult(res, result) {
 		if (res.params.limit > 0) {
@@ -77,6 +82,15 @@ module.exports = function(robot) {
 		return msg;
 	}
 
+	function renderUsers(res, msg, records) {
+		var found = false;
+		_.forEach(limitResult(res, records), function(item) {
+			msg += `\n[#${item.id} - ${item.username} - ${item.name}](${item.web_url})`;
+		});
+
+		return msg;
+	}
+
 	function renderMilestones(res, msg, records) {
 		_.forEach(limitResult(res, records), function(item) {
 			msg += `\n#${item.iid} - ${item.title}`;
@@ -103,7 +117,6 @@ module.exports = function(robot) {
 	// Project
 	robot.respond(/p(?:roject)? search (.+)/i, function(res) {
 		extractParams(res, 'search, project');
-		res.reply('I\'ll check around for that project of yours...');
 		gitlab.projects.search(res.params.search, function(records) {
 			var msg = 'Here is your list of projects\n';
 
@@ -113,7 +126,6 @@ module.exports = function(robot) {
 
 	robot.respond(/p(?:roject)? list(\sall)*/i, function(res) {
 		extractParams(res, 'status, project');
-		res.reply('Ok child, let me fetch some projects for you. Hang on just a sec.');
 		gitlab.projects.all(function(records) {
 			var msg = 'Here is your list of projects\n';
 
@@ -128,10 +140,21 @@ module.exports = function(robot) {
 	});
 
 
+	// User
+	robot.respond(/u(?:ser)? list(\sall)*/i, function(res) {
+		extractParams(res, 'status');
+		gitlab.users.all(function(records) {
+			var msg = 'Here is your list of users\n';
+			console.log(records);
+
+			res.reply(renderUsers(res, msg, records));
+		});
+	});
+
+
 	// Milestone
 	robot.respond(/m(?:ilestone)? list\s?(\d+)?\s?(all|opened|closed)*/i, function(res) {
 		extractParams(res, 'project, status');
-		res.reply('Ok, sure...you want to see the big picture? Fetching milestones...');
 		gitlab.projects.milestones.all(res.params.project, function(records) {
 			var msg = `Milestones from **Project #${res.params.project}**\n`;
 
@@ -141,13 +164,81 @@ module.exports = function(robot) {
 
 
 	// Issue
+	// describe('i|issue list [options]', 'List opened issues', {
+	// 	'a,all': 'List all issues',
+	// 	'c,closed': 'List closed issues only',
+	// 	'p,project': 'List issues from give project'
+	// });
 	robot.respond(/i(?:ssue)? list\s?(\d+)?\s?(all|opened|closed)*/i, function(res) {
 		extractParams(res, 'project, status');
-		res.reply('Let me check the exu-tracker for some issues...hang on a while.');
 		gitlab.projects.issues.list(res.params.project, function(records) {
 			var msg = `Issues from **Project #${res.params.project}**\n`;
 
 			res.reply(renderIssues(res, msg, records));
 		});
 	});
+
+	// describe('i|issue list [options]', 'List opened issues', {
+	// 	'a,all': 'List all issues',
+	// 	'c,closed': 'List closed issues only',
+	// 	'p,project': 'List issues from give project'
+	// });
+	robot.respond(/i(?:ssue)? create\s(.+)\s*\n?((?:.*\n?)*)/i, function(res) {
+		extractParams(res, 'title, description, project');
+
+		var data = {
+			title: res.params.title,
+			description: res.params.description
+		};
+		gitlab.issues.create(res.params.project, data, function(record) {
+			var msg = `Issue created in **Project #${res.params.project}**\n`;
+
+			res.reply(renderIssues(res, msg, [record]));
+		});
+	});
+
+	robot.respond(/i(?:ssue)? (\d+) assign (\w+)/i, function(res) {
+		extractParams(res, 'issue, username, project');
+
+		gitlab.users.all(function(users) {
+			var user = _.findWhere(users, {username: res.params.username});
+			if (!user) {
+				return res.reply(`User with username \`${res.params.username}\` not found`);
+			}
+
+			var data = {
+				assignee_id: user.id
+			};
+			gitlab.issues.edit(res.params.project, res.params.issue, data, function(record) {
+				var msg = `Issue assigned to \`${user.username}\` in **Project #${res.params.project}**\n`;
+
+				res.reply(msg);
+			});
+		});
+	});
+
+	robot.respond(/i(?:ssue)? (\d+) (close|reopen)/i, function(res) {
+		extractParams(res, 'issue, action, project');
+
+		var data = {
+			state_event: res.params.action
+		};
+		gitlab.issues.edit(res.params.project, res.params.issue, data, function(record) {
+			var msg = `Issue ${record.id} is now ${record.state} in **Project #${res.params.project}**\n`;
+
+			res.reply(renderIssues(res, msg, [record]));
+		});
+	});
+
+	// Waiting new node gitlab package version
+	// robot.respond(/i(?:ssue)? (\d+) (remove)/i, function(res) {
+	// 	extractParams(res, 'issue, action, project');
+
+	// 	gitlab.issues.remove(res.params.project, res.params.issue, function(record) {
+	// 		console.log(record);
+	// 		var msg = `Issue ${record.id} is now ${record.state} in **Project #${res.params.project}**\n`;
+
+	// 		res.reply(renderIssues(res, msg, [record]));
+	// 	});
+	// });
 };
