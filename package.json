@@ -19,7 +19,7 @@
     "url": "git+https://gitlab.sigmageosistemas.com.br/dev/hubot-gitlab-agile.git"
   },
   "dependencies": {
-    "gitlab": "git://github.com/node-gitlab/node-gitlab.git#develop",
+    "gitlab": "git://github.com/RocketChat/node-gitlab.git#develop",
     "hubot": "^2.13.2",
     "hubot-redis-brain": "0.0.3",
     "underscore": "^1.8.3"
