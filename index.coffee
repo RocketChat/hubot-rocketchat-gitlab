@@ -1,5 +1,5 @@
 Path = require 'path'
 
 module.exports = (robot) ->
-  path = Path.resolve __dirname, 'scripts'
+  path = Path.resolve __dirname, 'lib'
   robot.load path
