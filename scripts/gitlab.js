@@ -113,6 +113,22 @@ module.exports = function(robot) {
 		return msg;
 	}
 
+	function renderPipelines(res, msg, records) {
+		_.forEach(limitResult(res, records), function(item) {
+			msg += `\n#${item.id} - ${item.ref} - **${item.status}**`;
+		});
+
+		return msg;
+	}
+
+	function renderBuilds(res, msg, records) {
+		_.forEach(limitResult(res, records), function(item) {
+			msg += `\n#${item.id} - ${item.name} (stage: ${item.stage}, branch: ${item.ref}) - **${item.status}**`;
+		});
+
+		return msg;
+	}
+
 
 	// Project
 	robot.respond(/p(?:roject)? search (.+)/i, function(res) {
@@ -162,6 +178,57 @@ module.exports = function(robot) {
 		});
 	});
 
+
+	// Builds
+	robot.respond(/b(?:uilds)? list\s?(created|pending|running|failed|success|canceled|skipped)?/i, function(res) {
+		extractParams(res, 'scope, project');
+		var params = {};
+
+		if (res.params.scope) {
+			params.scope = res.params.scope;
+		}
+
+		gitlab.projects.builds.listBuilds(res.params.project, params, function(records) {
+			var msg = `Builds from **Project #${res.params.project}**\n`;
+
+			res.reply(renderBuilds(res, msg, records));
+		});
+	});
+
+	robot.respond(/b(?:uilds)? play (\d+)/i, function(res) {
+		extractParams(res, 'build, project');
+		gitlab.projects.builds.play(res.params.project, res.params.build, function(record) {
+			var msg = `Playing build ${res.params.build} in **Project #${res.params.project}**\n`;
+
+			if (record == true) {
+				return res.reply(msg+'Build already executed or nonexistent');
+			}
+
+			res.reply(renderBuilds(res, msg, [record]));
+		});
+	});
+
+	robot.respond(/b(?:uilds)? retry (\d+)/i, function(res) {
+		extractParams(res, 'build, project');
+		gitlab.projects.builds.retry(res.params.project, res.params.build, function(record) {
+			var msg = `Retrying build ${res.params.build} in **Project #${res.params.project}**\n`;
+
+			res.reply(renderBuilds(res, msg, [record]));
+		});
+	});
+
+	robot.respond(/b(?:uilds)? erase (\d+)/i, function(res) {
+		extractParams(res, 'build, project');
+		gitlab.projects.builds.erase(res.params.project, res.params.build, function(record) {
+			var msg = `Erasing build ${res.params.build} in **Project #${res.params.project}**\n`;
+
+			if (record == true) {
+				return res.reply(msg+'Build already erased or nonexistent');
+			}
+
+			res.reply(renderBuilds(res, msg, [record]));
+		});
+	});
 
 	// Issue
 	// describe('i|issue list [options]', 'List opened issues', {
@@ -239,6 +306,31 @@ module.exports = function(robot) {
 			} else {
 				res.reply(`There was a problem removing issue ${res.params.isseu} in **Project #${res.params.project}**`);
 			}
+		});
+	});
+
+
+	// Pipeline
+	robot.respond(/pi(?:peline)? list/i, function(res) {
+		extractParams(res, 'issue, action, project');
+
+		gitlab.pipelines.all(res.params.project, function(records) {
+			var msg = `Pipeline list in **Project #${res.params.project}**\n`;
+
+			res.reply(renderPipelines(res, msg, records));
+		});
+	});
+
+
+	// Deployments
+	robot.respond(/d(?:eployment)? list/i, function(res) {
+		extractParams(res, 'issue, action, project');
+
+		gitlab.deployments.all(res.params.project, function(records) {
+			console.log(records);
+			var msg = `Pipeline list in **Project #${res.params.project}**\n`;
+
+			res.reply(renderPipelines(res, msg, records));
 		});
 	});
 };
