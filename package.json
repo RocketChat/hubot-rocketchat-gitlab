@@ -5,10 +5,11 @@
   "preferGlobal": "false",
   "main": "index.js",
   "scripts": {},
-  "author": "George Rodrigues da Cunha Silva",
+  "author": "Rodrigo K. Nascimento",
   "keywords": [
     "hubot",
     "hubot-redis-brain",
+    "rocket.chat",
     "gitlab",
     "agile",
     "burndown",
@@ -16,7 +17,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://gitlab.sigmageosistemas.com.br/dev/hubot-gitlab-agile.git"
+    "url": "git@github.com:RocketChat/hubot-rocketchat-gitlab.git"
   },
   "dependencies": {
     "gitlab": "git://github.com/RocketChat/node-gitlab.git#develop",
@@ -28,8 +29,8 @@
     "node": "*"
   },
   "bugs": {
-    "url": "https://gitlab.sigmageosistemas.com.br/dev/hubot-gitlab-agile/issues"
+    "url": "https://github.com/RocketChat/hubot-rocketchat-gitlab/issues"
   },
-  "homepage": "https://gitlab.sigmageosistemas.com.br/dev/hubot-gitlab-agile",
+  "homepage": "https://github.com/RocketChat/hubot-rocketchat-gitlab",
   "license": "GPL-3.0"
 }
