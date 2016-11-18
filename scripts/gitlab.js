@@ -4,8 +4,19 @@
 //   hubot p|project search <term>
 //   hubot p|project list
 //   hubot p|project set <project_id>
-//   hubot m|milestone list <project_id>
-//   hubot i|issues list <project_id>
+//   hubot u|user list
+//   hubot m|milestone list <all|opened|closed>?
+//   hubot b|build list <created|pending|running|failed|success|canceled|skipped>?
+//   hubot b|build play <build_id>
+//   hubot b|build retry <build_id>
+//   hubot b|build erase <build_id>
+//   hubot i|issue list <all|opened|closed>?
+//   hubot i|issue create <title>\n<body>
+//   hubot i|issue assign <issue_id> <username>
+//   hubot i|issue <close|reopen|remove> <issue_id>
+//   hubot pi|pipeline list
+//   hubot d|deployment list
+
 
 // Dependencies:
 //   hubot-redis-brain node-gitlab
@@ -171,8 +182,14 @@ module.exports = function(robot) {
 	});
 
 	robot.respond(/p(?:roject)? set (\d+)/i, {params: 'project'}, function(res) {
-		robot.brain.set('gitlab_project_by_room_'+res.envelope.room, res.params.project);
-		res.reply(`Default project setted to \`${robot.brain.get('gitlab_project_by_room_'+res.envelope.room)}\``);
+		gitlab.projects.show(res.params.project, function(record) {
+			if (!record) {
+				return res.reply(`Project #${res.params.project} not found`);
+			}
+
+			robot.brain.set('gitlab_project_by_room_'+res.envelope.room, record.id);
+			res.reply(`Default project setted to \`#${robot.brain.get('gitlab_project_by_room_'+res.envelope.room)} - ${record.name}\``);
+		});
 	});
 
 
@@ -198,7 +215,7 @@ module.exports = function(robot) {
 
 
 	// Builds
-	robot.respond(/b(?:uilds)? list\s?(created|pending|running|failed|success|canceled|skipped)?/i, {params: 'scope', requireProject: true}, function(res) {
+	robot.respond(/b(?:uild)? list\s?(created|pending|running|failed|success|canceled|skipped)?/i, {params: 'scope', requireProject: true}, function(res) {
 		var params = {};
 
 		if (res.params.scope) {
@@ -212,7 +229,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/b(?:uilds)? play (\d+)/i, {params: 'build', requireProject: true}, function(res) {
+	robot.respond(/b(?:uild)? play (\d+)/i, {params: 'build', requireProject: true}, function(res) {
 		gitlab.projects.builds.play(res.params.project, res.params.build, function(record) {
 			var msg = `Playing build ${res.params.build} in **Project #${res.params.project}**\n`;
 
@@ -224,7 +241,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/b(?:uilds)? retry (\d+)/i, {params: 'build', requireProject: true}, function(res) {
+	robot.respond(/b(?:uild)? retry (\d+)/i, {params: 'build', requireProject: true}, function(res) {
 		gitlab.projects.builds.retry(res.params.project, res.params.build, function(record) {
 			var msg = `Retrying build ${res.params.build} in **Project #${res.params.project}**\n`;
 
@@ -232,7 +249,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/b(?:uilds)? erase (\d+)/i, {params: 'build', requireProject: true}, function(res) {
+	robot.respond(/b(?:uild)? erase (\d+)/i, {params: 'build', requireProject: true}, function(res) {
 		gitlab.projects.builds.erase(res.params.project, res.params.build, function(record) {
 			var msg = `Erasing build ${res.params.build} in **Project #${res.params.project}**\n`;
 
@@ -265,7 +282,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/i(?:ssue)? (\d+) assign (\w+)/i, {params: 'issue, username', requireProject: true}, function(res) {
+	robot.respond(/i(?:ssue)? assign (\d+) (\w+)/i, {params: 'issue, username', requireProject: true}, function(res) {
 		gitlab.users.all(function(users) {
 			var user = _.findWhere(users, {username: res.params.username});
 			if (!user) {
@@ -283,7 +300,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/i(?:ssue)? (\d+) (close|reopen)/i, {params: 'issue, action', requireProject: true}, function(res) {
+	robot.respond(/i(?:ssue)? (close|reopen) (\d+)/i, {params: 'action, issue', requireProject: true}, function(res) {
 		var data = {
 			state_event: res.params.action
 		};
@@ -294,7 +311,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/i(?:ssue)? (\d+) (remove)/i, {params: 'issue, action', requireProject: true}, function(res) {
+	robot.respond(/i(?:ssue)? (remove) (\d+)/i, {params: 'action, issue', requireProject: true}, function(res) {
 		gitlab.issues.remove(res.params.project, res.params.issue, function(record) {
 			if (record === true) {
 				res.reply(`Issue ${res.params.issue} was removed in **Project #${res.params.project}**`);
