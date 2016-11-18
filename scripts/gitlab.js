@@ -42,8 +42,6 @@ module.exports = function(robot) {
 	function extractParams(res, params) {
 		params = params.replace(/\s+/g, '').split(',');
 
-		res.params = {};
-
 		var defaultParams = {
 			'project': function() {
 				return robot.brain.get('gitlab_project_by_room_'+res.envelope.room);
@@ -62,6 +60,10 @@ module.exports = function(robot) {
 		// console.log('Params:', JSON.stringify(res.params, null, 2));
 	}
 
+	function getSetProjectMessage() {
+		var robot_name = robot.alias || robot.name;
+		return `Use \`${robot_name} project set #PROJECT_ID\` to set default project`;
+	}
 
 	// Renders
 	function renderProjects(res, msg, records) {
@@ -76,7 +78,7 @@ module.exports = function(robot) {
 		});
 
 		if (found === false) {
-			msg += `\n\nUse \`bot gitlab set project #PROJECT_ID\` to set default project`;
+			msg += '\n\n'+getSetProjectMessage();
 		}
 
 		return msg;
@@ -129,10 +131,30 @@ module.exports = function(robot) {
 		return msg;
 	}
 
+	robot.listenerMiddleware(function(context, next, done) {
+		context.response.params = context.response.params || {};
+
+		if (!context.listener.options) {
+			return next();
+		}
+
+		if (context.listener.options.params) {
+			extractParams(context.response, context.listener.options.params);
+		}
+
+		if (context.listener.options.requireProject === true) {
+			context.response.params.project = robot.brain.get('gitlab_project_by_room_' + context.response.envelope.room);
+			if (!context.response.params.project) {
+				return context.response.reply(getSetProjectMessage());
+			}
+		}
+
+		next();
+	});
+
 
 	// Project
-	robot.respond(/p(?:roject)? search (.+)/i, function(res) {
-		extractParams(res, 'search, project');
+	robot.respond(/p(?:roject)? search (.+)/i, {params: 'search', requireProject: true}, function(res) {
 		gitlab.projects.search(res.params.search, function(records) {
 			var msg = 'Here is your list of projects\n';
 
@@ -140,8 +162,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/p(?:roject)? list(\sall)*/i, function(res) {
-		extractParams(res, 'status, project');
+	robot.respond(/p(?:roject)? list/i, {params: 'project'}, function(res) {
 		gitlab.projects.all(function(records) {
 			var msg = 'Here is your list of projects\n';
 
@@ -149,16 +170,14 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/p(?:roject)? set (\d+)/i, function(res) {
-		extractParams(res, 'project');
+	robot.respond(/p(?:roject)? set (\d+)/i, {params: 'project'}, function(res) {
 		robot.brain.set('gitlab_project_by_room_'+res.envelope.room, res.params.project);
 		res.reply(`Default project setted to \`${robot.brain.get('gitlab_project_by_room_'+res.envelope.room)}\``);
 	});
 
 
 	// User
-	robot.respond(/u(?:ser)? list(\sall)*/i, function(res) {
-		extractParams(res, 'status');
+	robot.respond(/u(?:ser)? list/i, function(res) {
 		gitlab.users.all(function(records) {
 			var msg = 'Here is your list of users\n';
 			console.log(records);
@@ -169,8 +188,7 @@ module.exports = function(robot) {
 
 
 	// Milestone
-	robot.respond(/m(?:ilestone)? list\s?(\d+)?\s?(all|opened|closed)*/i, function(res) {
-		extractParams(res, 'project, status');
+	robot.respond(/m(?:ilestone)? list\s?(all|opened|closed)*/i, {params: 'status', requireProject: true}, function(res) {
 		gitlab.projects.milestones.all(res.params.project, function(records) {
 			var msg = `Milestones from **Project #${res.params.project}**\n`;
 
@@ -180,8 +198,7 @@ module.exports = function(robot) {
 
 
 	// Builds
-	robot.respond(/b(?:uilds)? list\s?(created|pending|running|failed|success|canceled|skipped)?/i, function(res) {
-		extractParams(res, 'scope, project');
+	robot.respond(/b(?:uilds)? list\s?(created|pending|running|failed|success|canceled|skipped)?/i, {params: 'scope', requireProject: true}, function(res) {
 		var params = {};
 
 		if (res.params.scope) {
@@ -195,8 +212,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/b(?:uilds)? play (\d+)/i, function(res) {
-		extractParams(res, 'build, project');
+	robot.respond(/b(?:uilds)? play (\d+)/i, {params: 'build', requireProject: true}, function(res) {
 		gitlab.projects.builds.play(res.params.project, res.params.build, function(record) {
 			var msg = `Playing build ${res.params.build} in **Project #${res.params.project}**\n`;
 
@@ -208,8 +224,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/b(?:uilds)? retry (\d+)/i, function(res) {
-		extractParams(res, 'build, project');
+	robot.respond(/b(?:uilds)? retry (\d+)/i, {params: 'build', requireProject: true}, function(res) {
 		gitlab.projects.builds.retry(res.params.project, res.params.build, function(record) {
 			var msg = `Retrying build ${res.params.build} in **Project #${res.params.project}**\n`;
 
@@ -217,8 +232,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/b(?:uilds)? erase (\d+)/i, function(res) {
-		extractParams(res, 'build, project');
+	robot.respond(/b(?:uilds)? erase (\d+)/i, {params: 'build', requireProject: true}, function(res) {
 		gitlab.projects.builds.erase(res.params.project, res.params.build, function(record) {
 			var msg = `Erasing build ${res.params.build} in **Project #${res.params.project}**\n`;
 
@@ -231,13 +245,7 @@ module.exports = function(robot) {
 	});
 
 	// Issue
-	// describe('i|issue list [options]', 'List opened issues', {
-	// 	'a,all': 'List all issues',
-	// 	'c,closed': 'List closed issues only',
-	// 	'p,project': 'List issues from give project'
-	// });
-	robot.respond(/i(?:ssue)? list\s?(\d+)?\s?(all|opened|closed)*/i, function(res) {
-		extractParams(res, 'project, status');
+	robot.respond(/i(?:ssue)? list\s?(all|opened|closed)*/i, {params: 'status', requireProject: true}, function(res) {
 		gitlab.projects.issues.list(res.params.project, function(records) {
 			var msg = `Issues from **Project #${res.params.project}**\n`;
 
@@ -245,14 +253,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	// describe('i|issue list [options]', 'List opened issues', {
-	// 	'a,all': 'List all issues',
-	// 	'c,closed': 'List closed issues only',
-	// 	'p,project': 'List issues from give project'
-	// });
-	robot.respond(/i(?:ssue)? create\s(.+)\s*\n?((?:.*\n?)*)/i, function(res) {
-		extractParams(res, 'title, description, project');
-
+	robot.respond(/i(?:ssue)? create\s(.+)\s*\n?((?:.*\n?)*)/i, {params: 'title, description', requireProject: true}, function(res) {
 		var data = {
 			title: res.params.title,
 			description: res.params.description
@@ -264,9 +265,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/i(?:ssue)? (\d+) assign (\w+)/i, function(res) {
-		extractParams(res, 'issue, username, project');
-
+	robot.respond(/i(?:ssue)? (\d+) assign (\w+)/i, {params: 'issue, username', requireProject: true}, function(res) {
 		gitlab.users.all(function(users) {
 			var user = _.findWhere(users, {username: res.params.username});
 			if (!user) {
@@ -284,9 +283,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/i(?:ssue)? (\d+) (close|reopen)/i, function(res) {
-		extractParams(res, 'issue, action, project');
-
+	robot.respond(/i(?:ssue)? (\d+) (close|reopen)/i, {params: 'issue, action', requireProject: true}, function(res) {
 		var data = {
 			state_event: res.params.action
 		};
@@ -297,9 +294,7 @@ module.exports = function(robot) {
 		});
 	});
 
-	robot.respond(/i(?:ssue)? (\d+) (remove)/i, function(res) {
-		extractParams(res, 'issue, action, project');
-
+	robot.respond(/i(?:ssue)? (\d+) (remove)/i, {params: 'issue, action', requireProject: true}, function(res) {
 		gitlab.issues.remove(res.params.project, res.params.issue, function(record) {
 			if (record === true) {
 				res.reply(`Issue ${res.params.issue} was removed in **Project #${res.params.project}**`);
@@ -311,9 +306,7 @@ module.exports = function(robot) {
 
 
 	// Pipeline
-	robot.respond(/pi(?:peline)? list/i, function(res) {
-		extractParams(res, 'issue, action, project');
-
+	robot.respond(/pi(?:peline)? list/i, {requireProject: true}, function(res) {
 		gitlab.pipelines.all(res.params.project, function(records) {
 			var msg = `Pipeline list in **Project #${res.params.project}**\n`;
 
@@ -323,11 +316,8 @@ module.exports = function(robot) {
 
 
 	// Deployments
-	robot.respond(/d(?:eployment)? list/i, function(res) {
-		extractParams(res, 'issue, action, project');
-
+	robot.respond(/d(?:eployment)? list/i, {requireProject: true}, function(res) {
 		gitlab.deployments.all(res.params.project, function(records) {
-			console.log(records);
 			var msg = `Pipeline list in **Project #${res.params.project}**\n`;
 
 			res.reply(renderPipelines(res, msg, records));
