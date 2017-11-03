@@ -1,36 +1,33 @@
 // Description:
 //   Create and mark tasks to do, done, etc.
 // Commands:
-//   hubot p|project search <term>
+//   hubot a|ccess config <access_token> <gitlab_url>
 //   hubot p|project list
 //   hubot p|project set <project_id>
+//   hubot p|project search <term>
+//   hubot i|issue list <all|opened|closed>?
+//   hubot i|issue create <title>\n<body>
+//   hubot i|issue assign <issue_id> <username>
+//   hubot i|issue <close|reopen|remove> <issue_id>
 //   hubot u|user list
 //   hubot m|milestone list <all|opened|closed>?
 //   hubot b|build list <created|pending|running|failed|success|canceled|skipped>?
 //   hubot b|build play <build_id>
 //   hubot b|build retry <build_id>
 //   hubot b|build erase <build_id>
-//   hubot i|issue list <all|opened|closed>?
-//   hubot i|issue create <title>\n<body>
-//   hubot i|issue assign <issue_id> <username>
-//   hubot i|issue <close|reopen|remove> <issue_id>
 //   hubot pi|pipeline list
 //   hubot d|deployment list
-
 
 // Dependencies:
 //   hubot-redis-brain node-gitlab
 /*jslint node: true*/
 
 module.exports = function(robot) {
-	// var GITLAB_RECORD_LIMIT = process.env.GITLAB_RECORD_LIMIT || 20;
-	var GITLAB_URL = process.env.GITLAB_URL;
-	var GITLAB_TOKEN = process.env.GITLAB_TOKEN;
+	var GITLAB_RECORD_LIMIT = process.env.GITLAB_RECORD_LIMIT || 20;
+	var GITLAB_URL = process.env.GITLAB_URL || "https://gitlab.com";
+	var GITLAB_TOKEN = process.env.GITLAB_TOKEN || false;
 
-	var gitlab = require('gitlab')({
-		url: GITLAB_URL,
-		token: GITLAB_TOKEN
-	});
+	var gitlab = {};
 
 	var _ = require('underscore');
 	var help = {};
@@ -67,8 +64,6 @@ module.exports = function(robot) {
 				res.params[param] = typeof defaultParams[param] === 'function' ? defaultParams[param]() : defaultParams[param];
 			}
 		}
-
-		// console.log('Params:', JSON.stringify(res.params, null, 2));
 	}
 
 	function getSetProjectMessage() {
@@ -76,11 +71,16 @@ module.exports = function(robot) {
 		return `Use \`${robot_name} project set #PROJECT_ID\` to set default project`;
 	}
 
+	function getGitlabToken() {
+		var robot_name = robot.alias || robot.name;
+		return `Use \`${robot_name} access config GITLAB_TOKEN GITLAB_URL\` to set gitlab's access key`;
+	}
+
 	// Renders
 	function renderProjects(res, msg, records) {
 		var found = false;
 		_.forEach(limitResult(res, records), function(item) {
-			msg += `\n[#${item.id} - ${item.path_with_namespace}](${item.web_url})`;
+			msg += `\n${item.id} - ${item.path_with_namespace}`;
 
 			if (String(item.id) === String(res.params.project)) {
 				found = true;
@@ -98,7 +98,7 @@ module.exports = function(robot) {
 	function renderUsers(res, msg, records) {
 		var found = false;
 		_.forEach(limitResult(res, records), function(item) {
-			msg += `\n[#${item.id} - ${item.username} - ${item.name}](${item.web_url})`;
+			msg += `\n${item.id} - ${item.username} - ${item.name}`;
 		});
 
 		return msg;
@@ -106,7 +106,7 @@ module.exports = function(robot) {
 
 	function renderMilestones(res, msg, records) {
 		_.forEach(limitResult(res, records), function(item) {
-			msg += `\n#${item.iid} - ${item.title}`;
+			msg += `\n${item.iid} - ${item.title}`;
 			if (item.state === 'closed') {
 				msg += ' **CLOSED**';
 			}
@@ -117,7 +117,7 @@ module.exports = function(robot) {
 
 	function renderIssues(res, msg, records) {
 		_.forEach(limitResult(res, records), function(item) {
-			msg += `\n[#${item.iid} - ${item.title}](${item.web_url})`;
+			msg += `\n${item.iid} - ${item.title}`;
 			if (item.state === 'closed') {
 				msg += ' **CLOSED**';
 			}
@@ -128,17 +128,22 @@ module.exports = function(robot) {
 
 	function renderPipelines(res, msg, records) {
 		_.forEach(limitResult(res, records), function(item) {
-			msg += `\n#${item.id} - ${item.ref} - **${item.status}**`;
+			msg += `\n- ${item.id} - ${item.ref} - **${item.status}**`;
 		});
 
 		return msg;
 	}
 
 	function renderBuilds(res, msg, records) {
+		initialLength = msg.length;
 		_.forEach(limitResult(res, records), function(item) {
-			msg += `\n#${item.id} - ${item.name} (stage: ${item.stage}, branch: ${item.ref}) - **${item.status}**`;
+			msg += `\n- ${item.id} - ${item.name} (stage: ${item.stage}, branch: ${item.ref}) - **${item.status}**`;
 		});
-
+		robot.logger.info("[DEBUG] renderBuilds On! msg= "+ msg + " length:" + msg.length);
+		if(msg.length <= initialLength){
+			// no builds message
+			msg += `\n **No builds found in this project**`;
+		}
 		return msg;
 	}
 
@@ -159,14 +164,54 @@ module.exports = function(robot) {
 				return context.response.reply(getSetProjectMessage());
 			}
 		}
+		// set GITLAB_TOKEN and GITLAB_URL
+		if (!context.response.params.gitlab_token) {
+			context.response.params.gitlab_token = robot.brain.get('gitlab_token_by_room_' + context.response.envelope.room);
+		  context.response.params.gitlab_url = robot.brain.get('gitlab_url_by_room_' + context.response.envelope.room);
+			if (!context.response.params.gitlab_url) {
+				robot.brain.set('gitlab_url_by_room_'+context.response.envelope.room, GITLAB_URL);
+			}
+			if (!context.response.params.gitlab_token && !GITLAB_TOKEN) {
+				return context.response.reply(getGitlabToken());
+			}else if (!context.response.params.gitlab_token && GITLAB_TOKEN !== false){
+				robot.brain.set('gitlab_token_by_room_'+context.response.envelope.room, GITLAB_TOKEN);
+			}
+		}
+
+		gitlab[context.response.envelope.room] = require('gitlab')({
+			url: robot.brain.get('gitlab_url_by_room_'+context.response.envelope.room),
+			token: robot.brain.get('gitlab_token_by_room_'+context.response.envelope.room)
+		});
 
 		next();
+	});
+
+	robot.respond(/a(?:ccess)? config (.+) (.+)/i, {params: 'gitlab_token, gitlab_url'}, function(res) {
+		robot.logger.info("[INFO] ACCESS CONFIG STARTED");
+		if(!res.params.gitlab_url){
+			robot.logger.info("[INFO] ACCESS CONFIG URL not in params, setting default gitlab.com");
+			res.params.gitlab_url = "https://gitlab.com";
+		}
+		if(!res.params.gitlab_token){
+			return res.reply(`You need to specify an access token and a gitlab url...`);
+		} else {
+			robot.logger.info("[INFO] ACCESS CONFIG PARAMS given, setting in brain");
+			robot.brain.set('gitlab_token_by_room_'+res.envelope.room, res.params.gitlab_token);
+			robot.brain.set('gitlab_url_by_room_'+res.envelope.room, res.params.gitlab_url);
+
+			gitlab[res.envelope.room] = require('gitlab')({
+				url: robot.brain.get('gitlab_url_by_room_'+res.envelope.room),
+				token: robot.brain.get('gitlab_token_by_room_'+res.envelope.room)
+			});
+
+			res.reply(`Access Token setted to \`#${robot.brain.get('gitlab_token_by_room_'+res.envelope.room)} on ${robot.brain.get('gitlab_url_by_room_'+res.envelope.room)}\``);
+		}
 	});
 
 
 	// Project
 	robot.respond(/p(?:roject)? search (.+)/i, {params: 'search', requireProject: true}, function(res) {
-		gitlab.projects.search(res.params.search, function(records) {
+		gitlab[res.envelope.room].projects.search(res.params.search, function(records) {
 			var msg = 'Here is your list of projects\n';
 
 			res.reply(renderProjects(res, msg, records));
@@ -174,7 +219,7 @@ module.exports = function(robot) {
 	});
 
 	robot.respond(/p(?:roject)? list/i, {params: 'project'}, function(res) {
-		gitlab.projects.all(function(records) {
+		gitlab[res.envelope.room].projects.all(function(records) {
 			var msg = 'Here is your list of projects\n';
 
 			res.reply(renderProjects(res, msg, records));
@@ -182,7 +227,7 @@ module.exports = function(robot) {
 	});
 
 	robot.respond(/p(?:roject)? set (\d+)/i, {params: 'project'}, function(res) {
-		gitlab.projects.show(res.params.project, function(record) {
+		gitlab[res.envelope.room].projects.show(res.params.project, function(record) {
 			if (!record) {
 				return res.reply(`Project #${res.params.project} not found`);
 			}
@@ -192,10 +237,9 @@ module.exports = function(robot) {
 		});
 	});
 
-
 	// User
 	robot.respond(/u(?:ser)? list/i, function(res) {
-		gitlab.users.all(function(records) {
+		gitlab[res.envelope.room].users.all(function(records) {
 			var msg = 'Here is your list of users\n';
 			console.log(records);
 
@@ -206,7 +250,7 @@ module.exports = function(robot) {
 
 	// Milestone
 	robot.respond(/m(?:ilestone)? list\s?(all|opened|closed)*/i, {params: 'status', requireProject: true}, function(res) {
-		gitlab.projects.milestones.all(res.params.project, function(records) {
+		gitlab[res.envelope.room].projects.milestones.all(res.params.project, function(records) {
 			var msg = `Milestones from **Project #${res.params.project}**\n`;
 
 			res.reply(renderMilestones(res, msg, records));
@@ -222,7 +266,7 @@ module.exports = function(robot) {
 			params.scope = res.params.scope;
 		}
 
-		gitlab.projects.builds.listBuilds(res.params.project, params, function(records) {
+		gitlab[res.envelope.room].projects.builds.listBuilds(res.params.project, params, function(records) {
 			var msg = `Builds from **Project #${res.params.project}**\n`;
 
 			res.reply(renderBuilds(res, msg, records));
@@ -230,7 +274,7 @@ module.exports = function(robot) {
 	});
 
 	robot.respond(/b(?:uild)? play (\d+)/i, {params: 'build', requireProject: true}, function(res) {
-		gitlab.projects.builds.play(res.params.project, res.params.build, function(record) {
+		gitlab[res.envelope.room].projects.builds.play(res.params.project, res.params.build, function(record) {
 			var msg = `Playing build ${res.params.build} in **Project #${res.params.project}**\n`;
 
 			if (record == true) {
@@ -242,7 +286,7 @@ module.exports = function(robot) {
 	});
 
 	robot.respond(/b(?:uild)? retry (\d+)/i, {params: 'build', requireProject: true}, function(res) {
-		gitlab.projects.builds.retry(res.params.project, res.params.build, function(record) {
+		gitlab[res.envelope.room].projects.builds.retry(res.params.project, res.params.build, function(record) {
 			var msg = `Retrying build ${res.params.build} in **Project #${res.params.project}**\n`;
 
 			res.reply(renderBuilds(res, msg, [record]));
@@ -250,7 +294,7 @@ module.exports = function(robot) {
 	});
 
 	robot.respond(/b(?:uild)? erase (\d+)/i, {params: 'build', requireProject: true}, function(res) {
-		gitlab.projects.builds.erase(res.params.project, res.params.build, function(record) {
+		gitlab[res.envelope.room].projects.builds.erase(res.params.project, res.params.build, function(record) {
 			var msg = `Erasing build ${res.params.build} in **Project #${res.params.project}**\n`;
 
 			if (record == true) {
@@ -263,7 +307,7 @@ module.exports = function(robot) {
 
 	// Issue
 	robot.respond(/i(?:ssue)? list\s?(all|opened|closed)*/i, {params: 'status', requireProject: true}, function(res) {
-		gitlab.projects.issues.list(res.params.project, function(records) {
+		gitlab[res.envelope.room].projects.issues.list(res.params.project, function(records) {
 			var msg = `Issues from **Project #${res.params.project}**\n`;
 
 			res.reply(renderIssues(res, msg, records));
@@ -275,7 +319,7 @@ module.exports = function(robot) {
 			title: res.params.title,
 			description: res.params.description
 		};
-		gitlab.issues.create(res.params.project, data, function(record) {
+		gitlab[res.envelope.room].issues.create(res.params.project, data, function(record) {
 			var msg = `Issue created in **Project #${res.params.project}**\n`;
 
 			res.reply(renderIssues(res, msg, [record]));
@@ -283,7 +327,7 @@ module.exports = function(robot) {
 	});
 
 	robot.respond(/i(?:ssue)? assign (\d+) (\w+)/i, {params: 'issue, username', requireProject: true}, function(res) {
-		gitlab.users.all(function(users) {
+		gitlab[res.envelope.room].users.all(function(users) {
 			var user = _.findWhere(users, {username: res.params.username});
 			if (!user) {
 				return res.reply(`User with username \`${res.params.username}\` not found`);
@@ -292,7 +336,7 @@ module.exports = function(robot) {
 			var data = {
 				assignee_id: user.id
 			};
-			gitlab.issues.edit(res.params.project, res.params.issue, data, function(record) {
+			gitlab[res.envelope.room].issues.edit(res.params.project, res.params.issue, data, function(record) {
 				var msg = `Issue assigned to \`${user.username}\` in **Project #${res.params.project}**\n`;
 
 				res.reply(msg);
@@ -304,7 +348,7 @@ module.exports = function(robot) {
 		var data = {
 			state_event: res.params.action
 		};
-		gitlab.issues.edit(res.params.project, res.params.issue, data, function(record) {
+		gitlab[res.envelope.room].issues.edit(res.params.project, res.params.issue, data, function(record) {
 			var msg = `Issue ${record.id} is now ${record.state} in **Project #${res.params.project}**\n`;
 
 			res.reply(renderIssues(res, msg, [record]));
@@ -312,7 +356,7 @@ module.exports = function(robot) {
 	});
 
 	robot.respond(/i(?:ssue)? (remove) (\d+)/i, {params: 'action, issue', requireProject: true}, function(res) {
-		gitlab.issues.remove(res.params.project, res.params.issue, function(record) {
+		gitlab[res.envelope.room].issues.remove(res.params.project, res.params.issue, function(record) {
 			if (record === true) {
 				res.reply(`Issue ${res.params.issue} was removed in **Project #${res.params.project}**`);
 			} else {
@@ -324,7 +368,7 @@ module.exports = function(robot) {
 
 	// Pipeline
 	robot.respond(/pi(?:peline)? list/i, {requireProject: true}, function(res) {
-		gitlab.pipelines.all(res.params.project, function(records) {
+		gitlab[res.envelope.room].pipelines.all(res.params.project, function(records) {
 			var msg = `Pipeline list in **Project #${res.params.project}**\n`;
 
 			res.reply(renderPipelines(res, msg, records));
@@ -334,7 +378,7 @@ module.exports = function(robot) {
 
 	// Deployments
 	robot.respond(/d(?:eployment)? list/i, {requireProject: true}, function(res) {
-		gitlab.deployments.all(res.params.project, function(records) {
+		gitlab[res.envelope.room].deployments.all(res.params.project, function(records) {
 			var msg = `Pipeline list in **Project #${res.params.project}**\n`;
 
 			res.reply(renderPipelines(res, msg, records));
