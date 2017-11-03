@@ -1,0 +1,45 @@
+version: '2'
+
+services:
+  # mongo:
+  #   image: mongo
+  #   volumes:
+  #   - ./chat/data/db:/data/db
+  #   - ./chat/data/dump:/dump
+  #   tty: true
+  #   command:
+  #   - mongod
+  #   - --smallfiles
+  #   - --oplogSize
+  #   - '128'
+  #
+  # rocketchat:
+  #   image: rocketchat/rocket.chat:latest
+  #   links:
+  #     - mongo
+  #   environment:
+  #     MONGO_URL: 'mongodb://mongo:27017/rocketchat'
+  #     PORT: '3000'
+  #     ROOT_URL: 'http://localhost:3000'
+  #   volumes:
+  #     - ./chat/uploads:/app/uploads
+  #   ports:
+  #     - '3000:3000'
+
+  hubot-gitlab:
+    image: diegodorgam/hubot-rocketchat-gitlab:latest
+    # links:
+    #   - rocketchat
+    environment:
+      ROCKETCHAT_URL: 'https://open.rocket.chat'
+      HUBOT_ADAPTER: rocketchat
+      HUBOT_NAME: 'Gitlab'
+      HUBOT_DESCRIPTION: 'Gitlab bot'
+      ROCKETCHAT_ROOM: GENERAL
+      RESPOND_TO_DM: 'true'
+      RESPOND_TO_LIVECHAT: 'true'
+      ROCKETCHAT_USER: gitlab
+      ROCKETCHAT_PASSWORD: 'gitlabuserpass'
+      ROCKETCHAT_AUTH: password
+      GITLAB_URL: "https://gitlab.com/"
+      GITLAB_TOKEN: "WpQG77uRtg4nLY22XSD-"
