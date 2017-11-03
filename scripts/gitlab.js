@@ -33,7 +33,7 @@ module.exports = function(robot) {
 	var help = {};
 
 	robot.brain.on('loaded', function() {
-
+		robot.logger.info("[INFO] I have a brain...");
 	});
 
 	function describe(command, description) {
@@ -96,54 +96,57 @@ module.exports = function(robot) {
 	}
 
 	function renderUsers(res, msg, records) {
+		var initialLength = msg.length;
 		var found = false;
 		_.forEach(limitResult(res, records), function(item) {
 			msg += `\n${item.id} - ${item.username} - ${item.name}`;
 		});
-
+		if(msg.length <= initialLength)	msg += `\n **No users found in this project**`;
 		return msg;
 	}
 
 	function renderMilestones(res, msg, records) {
+		var initialLength = msg.length;
 		_.forEach(limitResult(res, records), function(item) {
 			msg += `\n${item.iid} - ${item.title}`;
 			if (item.state === 'closed') {
 				msg += ' **CLOSED**';
 			}
 		});
-
+		if(msg.length <= initialLength)	msg += `\n **No milestones found in this project**`;
 		return msg;
 	}
 
 	function renderIssues(res, msg, records) {
+		var initialLength = msg.length;
 		_.forEach(limitResult(res, records), function(item) {
 			msg += `\n${item.iid} - ${item.title}`;
 			if (item.state === 'closed') {
 				msg += ' **CLOSED**';
 			}
 		});
-
+		if(msg.length <= initialLength)	msg += `\n **No issues found in this project**`;
 		return msg;
 	}
 
 	function renderPipelines(res, msg, records) {
+		var initialLength = msg.length;
 		_.forEach(limitResult(res, records), function(item) {
 			msg += `\n- ${item.id} - ${item.ref} - **${item.status}**`;
 		});
-
+		if(msg.length <= initialLength)	msg += `\n **No pipelines found in this project**`;
 		return msg;
 	}
 
 	function renderBuilds(res, msg, records) {
-		initialLength = msg.length;
+		var initialLength = msg.length;
 		_.forEach(limitResult(res, records), function(item) {
 			msg += `\n- ${item.id} - ${item.name} (stage: ${item.stage}, branch: ${item.ref}) - **${item.status}**`;
 		});
 		robot.logger.info("[DEBUG] renderBuilds On! msg= "+ msg + " length:" + msg.length);
-		if(msg.length <= initialLength){
-			// no builds message
-			msg += `\n **No builds found in this project**`;
-		}
+
+		if(msg.length <= initialLength)	msg += `\n **No builds found in this project**`;
+
 		return msg;
 	}
 
@@ -349,9 +352,14 @@ module.exports = function(robot) {
 			state_event: res.params.action
 		};
 		gitlab[res.envelope.room].issues.edit(res.params.project, res.params.issue, data, function(record) {
-			var msg = `Issue ${record.id} is now ${record.state} in **Project #${res.params.project}**\n`;
+			// robot.logger.debug(record);
+			if (record !== null ){
+				var msg = `Issue ${record.id} is now ${record.state} in **Project #${res.params.project}**\n`;
+				res.reply(renderIssues(res, msg, [record]));
+			}else{
+				res.reply(`There was a problem editing issue #${res.params.issue}`);
+			}
 
-			res.reply(renderIssues(res, msg, [record]));
 		});
 	});
 
@@ -360,7 +368,7 @@ module.exports = function(robot) {
 			if (record === true) {
 				res.reply(`Issue ${res.params.issue} was removed in **Project #${res.params.project}**`);
 			} else {
-				res.reply(`There was a problem removing issue ${res.params.isseu} in **Project #${res.params.project}**`);
+				res.reply(`There was a problem removing issue ${res.params.issue} in **Project #${res.params.project}**`);
 			}
 		});
 	});
