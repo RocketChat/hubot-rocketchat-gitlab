@@ -1,5 +1,4 @@
 # hubot-rocketchat-gitlab
-==================
 
 ## Objetive
 
@@ -27,77 +26,82 @@ The tokens can be specified by channel, or even by direct message, using `access
 
 commands will have full syntax and small syntax, to those who want to be more agile. Small syntax consists generally in using the first letter of the command with it's parameters.
 
-### hubot a|access config <token> <gitlab_url>
+
+### hubot s|erver set <gitlab_url> <token>
 
 It sets the URL and TOKEN for the bot to use in the channel.
 
-### hubot p|project list
+### hubot s|ecurity role <role>
+
+Blocks the access to the bot functions on the channel based on Rocket.Chat roles.
+
+### hubot p|roject list
 
 List gitlab's projects. Order is by usage of projects in gitlab.
 
 It may take a while to return the response!
 
-### hubot p|project set <project ID>
+### hubot p|roject set <project ID>
 
 Sets the default project for working on it.
 
-### hubot p|project search <term>
+### hubot p|roject search <term>
 
 Searches gitlab for a project with name term
 
-### hubot m|milestones list [all|opened|closed]
+### hubot m|ilestones list [all|opened|closed]
 
 List milestones for a specific project. if you specify a modifier,
 it will be applied.
 
-### hubot i|issue list <all|opened|closed>
+### hubot i|ssue list <all|opened|closed>
 
 Lists issues related to the default project.
 
-### hubot i|issue create <title>\n<body>
+### hubot i|ssue create <title>\n<body>
 
 Create issues
 
-### hubot i|issue assign <issue_id> <username>
+### hubot i|ssue assign <issue_id> <username>
 
 Assign issues to users
 
-### hubot i|issue <close|reopen|remove> <issue_id>
+### hubot i|ssue <close|reopen|remove> <issue_id>
 
 Close, reopen and remove issues
 
-### hubot u|user list
+### hubot u|ser list
 
 Lists users, if the token have this permittion
 
-### hubot m|milestone list <all|opened|closed>?
+### hubot m|ilestone list <all|opened|closed>?
 
 Lists milestones
 
-### hubot b|build list <created|pending|running|failed|success|canceled|skipped>?
+### hubot b|uild list <created|pending|running|failed|success|canceled|skipped>?
 
 Lists builds
 
-### hubot b|build play <build_id>
+### hubot b|uild play <build_id>
 
 Make it able to play a pending or canceled build.
 
-### hubot b|build retry <build_id>
+### hubot b|uild retry <build_id>
 
 Rebuilds it
 
-### hubot b|build erase <build_id>
+### hubot b|uild erase <build_id>
 
 Erases the build
 
-### hubot pi|pipeline list
+### hubot pi|peline list
 
 Lists pipelines
 
-### hubot d|deployment list
+### hubot d|eployment list
 
 List deployments
 
-## Forked from
+## Thanks to
 https://gitlab.sigmageosistemas.com.br/dev/hubot-gitlab-agile
 Thanks to George Rodrigues da Cunha Silva
