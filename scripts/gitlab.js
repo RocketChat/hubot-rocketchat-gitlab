@@ -1,7 +1,8 @@
 // Description:
 //   Create and mark tasks to do, done, etc.
 // Commands:
-//   hubot a|ccess config <access_token> <gitlab_url>
+//   hubot s|erver set <gitlab_url> <access_token>
+//   hubot s|ecurity role <role>
 //   hubot p|project list
 //   hubot p|project set <project_id>
 //   hubot p|project search <term>
@@ -31,13 +32,49 @@ module.exports = function(robot) {
 
 	var _ = require('underscore');
 	var help = {};
+	var usersAndRoles = {};
 
 	robot.brain.on('loaded', function() {
-		robot.logger.info("[INFO] I have a brain...");
+		robot.logger.info("Brain is loaded");
+		//robot.adapter.sendDirect({user:{name:'diego'}},'eu tenho um cerebro');
 	});
 
 	function describe(command, description) {
 		help[command] = description;
+	}
+
+	function getUserRoles(userid){
+		robot.adapter.chatdriver.callMethod('getUserRoles').then(function (users) {
+			robot.logger.debug("gUR Users: " + JSON.stringify(users));
+	    users.forEach(function (user) {
+				//robot.logger.info("> UserRoles: " + JSON.stringify(user.roles));
+	    	user.roles.forEach(function (role) {
+	      	if (typeof(usersAndRoles[role]) == 'undefined') {
+	        	usersAndRoles[role] = [];
+	        }
+	        usersAndRoles[role].push(user.username);
+	      });
+	    });
+			robot.logger.info("gUR Users and Roles loaded: " + JSON.stringify(usersAndRoles));
+		});
+	}
+	getUserRoles();
+
+	function checkRole(role, uname){
+		robot.logger.debug("cR uname: " + uname);
+		robot.logger.debug("cR role: " + role);
+		if (typeof(usersAndRoles[role]) !== 'undefined') {
+			if(usersAndRoles[role].indexOf(uname) === -1){
+				robot.logger.debug("cR role: " + role);
+				robot.logger.debug("cR indexOf: " + usersAndRoles[role].indexOf(uname));
+				return false;
+			}else{
+				return true;
+			}
+		}else{
+			robot.logger.info("Role "+role+" não encontrado");
+			return false;
+		}
 	}
 
 	function limitResult(res, result) {
@@ -186,19 +223,29 @@ module.exports = function(robot) {
 			token: robot.brain.get('gitlab_token_by_room_'+context.response.envelope.room)
 		});
 
+		// check security clearance
+		robot.logger.debug("MID rc_role="+context.response.params.rc_role);
+		robot.logger.debug("MID user.name="+context.response.message.user.name);
+
+		if(robot.brain.get('security_role_by_room_'+context.response.envelope.room) !== null){
+			if(checkRole(robot.brain.get('security_role_by_room_'+context.response.envelope.room), context.response.message.user.name) || checkRole('admin', context.response.message.user.name)){
+				robot.logger.debug("ACCESS GRANTED in middlewareListener");
+			}else{
+				robot.logger.debug("ACCESS DENIED in middlewareListener");
+				return context.response.reply("`Access Denied!`");
+			}
+		}
 		next();
 	});
-
-	robot.respond(/a(?:ccess)? config (.+) (.+)/i, {params: 'gitlab_token, gitlab_url'}, function(res) {
-		robot.logger.info("[INFO] ACCESS CONFIG STARTED");
+	// Server
+	robot.respond(/s(?:erver)? set (.+) (.+)/i, {params: 'gitlab_url, gitlab_token'}, function(res) {
 		if(!res.params.gitlab_url){
-			robot.logger.info("[INFO] ACCESS CONFIG URL not in params, setting default gitlab.com");
+			robot.logger.info("Gitlab URL not in params, setting default https://gitlab.com");
 			res.params.gitlab_url = "https://gitlab.com";
 		}
 		if(!res.params.gitlab_token){
 			return res.reply(`You need to specify an access token and a gitlab url...`);
 		} else {
-			robot.logger.info("[INFO] ACCESS CONFIG PARAMS given, setting in brain");
 			robot.brain.set('gitlab_token_by_room_'+res.envelope.room, res.params.gitlab_token);
 			robot.brain.set('gitlab_url_by_room_'+res.envelope.room, res.params.gitlab_url);
 
@@ -207,11 +254,28 @@ module.exports = function(robot) {
 				token: robot.brain.get('gitlab_token_by_room_'+res.envelope.room)
 			});
 
-			res.reply(`Access Token setted to \`#${robot.brain.get('gitlab_token_by_room_'+res.envelope.room)} on ${robot.brain.get('gitlab_url_by_room_'+res.envelope.room)}\``);
+			res.reply(`New access token given \`#${robot.brain.get('gitlab_token_by_room_'+res.envelope.room)} on server ${robot.brain.get('gitlab_url_by_room_'+res.envelope.room)}\``);
 		}
 	});
-
-
+	// Security
+	robot.respond(/s(?:ecurity)? role (.+)/i, {params: 'rc_role'}, function(res) {
+		robot.logger.debug("CB rc_role="+res.params.rc_role);
+		if(!res.params.rc_role){
+			robot.logger.info("No role given");
+			return res.reply(`You need to specify an actual Rocket.Chat role.`);
+		} else {
+			if (checkRole('admin',res.message.user.name)){
+				if (typeof(usersAndRoles[res.params.rc_role]) !== 'undefined') {
+					robot.brain.set('security_role_by_room_'+res.envelope.room, res.params.rc_role);
+					res.reply(`New access level setted to role \`${robot.brain.get('security_role_by_room_'+res.envelope.room)}\``);
+				}else{
+					res.reply(`The role \`${res.params.rc_role}\` was not found. Please use an actual role.`);
+				}
+			}else{
+				res.reply(`Access Denied! You must have admin role to perform this action.`);
+			}
+		}
+	});
 	// Project
 	robot.respond(/p(?:roject)? search (.+)/i, {params: 'search', requireProject: true}, function(res) {
 		gitlab[res.envelope.room].projects.search(res.params.search, function(records) {
